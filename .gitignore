@@ -1,0 +1,14 @@
+# Game data and pictures of it: never commit
+*.cci
+*.3ds
+*.cia
+*.cxi
+*.app
+*.png
+*.jpg
+*.dump
+/roms/
+/runs/
+# A portable Azahar's own folder
+/azahar/
+user/
