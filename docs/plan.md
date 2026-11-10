@@ -19,7 +19,8 @@ Each step ends with something that can be tried; the next one only starts when i
 5. **A picture for a monitor.** Both screens in one window: the top screen large and the touch
    screen beside or over it (Azahar's layouts are the start), the mouse as the touch screen, a
    controller layout like the console games', the portal menu (skylanders-portal's) for putting
-   figures on.
+   figures on. From CoL #72 (a player's ideas): a key that switches the layout (both, swapped, only
+   one), the touch screen on a second monitor; later perhaps a phone or tablet as the touch screen.
 6. **Core of Light.** A tab "Xbox 360 | 3DS" at the top; the 3DS games set up from the player's own
    dumps (decrypted CCI/CIA), their settings and figures as for the console games.
 
