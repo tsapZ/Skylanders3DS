@@ -13,6 +13,11 @@ Each step ends with something that can be tried; the next one only starts when i
    skylanders-portal's `SoftwarePortal` and sends its replies back; figures from the same figure
    files the Xbox 360 ports use (Documents\Skylanders\Figures). If not, the protocol gets written
    down here first, from the game's traffic.
+   **Reached in its first form, 2026-11-11** (docs/findings-2026-11-11.md): the commands are the console
+   ones behind the light's colour; the device answers them itself, as SoftwarePortal does, from figure
+   files; Giants 3DS took two of them into its crystals and went into play. Still to do: the real
+   SoftwarePortal (linked, figures from the figure folder, writes saved), a way to swap figures while
+   playing (a menu or a hotkey instead of the list), what the high nibble in Q means, W (writes).
 4. **The other games.** Spyro's Adventure 3DS (rated Bad: what goes wrong), Swap Force 3DS and
    SuperChargers Racing (rated Great), Trap Team 3DS (won't boot: why). The owner can dump the
    other three from his own 3DS.
