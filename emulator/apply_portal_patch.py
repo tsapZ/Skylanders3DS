@@ -1,10 +1,13 @@
-"""apply_portal_patch.py <azahar checkout>: step 2 of docs/plan.md in an Azahar source tree (tag 2126.2).
+"""apply_portal_patch.py <azahar checkout>: steps 2 and 3 of docs/plan.md in an Azahar source tree (tag 2126.2).
 
 ir:USER's AutoConnection (0x0007), which the Skylanders 3DS games call at "Aim at the PORTAL OF POWER", connects a
 new infrared device, SkylandersPortal, the way RequireConnection connects the Circle Pad Pro; SendIrNop then goes to
-the connected device instead of always to the Circle Pad Pro. The device logs what the game sends (Service.IR, Info)
-and, to learn the protocol, answers from a table of hex replies named by SKYLANDERS_PORTAL_REPLIES (none without it). GetConnectionStatus (0x0013) and GetConnectionRole (0x0017) answer from
-the shared memory header. All edits are checked before anything is written; a second run changes nothing.
+the connected device instead of always to the Circle Pad Pro. Every packet the game sends is ff ff ff and a console
+portal command; the device answers them as skylanders-portal's SoftwarePortal answers a console game (R, A, S with a
+counter, Q, W), with one figure on slot 0 from the file SKYLANDERS_PORTAL_FIGURE names (never written back). For
+experiments a table of hex replies named by SKYLANDERS_PORTAL_REPLIES comes first. Everything is logged (Service.IR,
+Info). GetConnectionStatus (0x0013) and GetConnectionRole (0x0017) answer from the shared memory header. All edits
+are checked before anything is written; a second run changes nothing.
 The new files are under Azahar's license (GPLv2 or later), as part of it. Stdlib only."""
 import pathlib
 import sys
@@ -15,14 +18,21 @@ PORTAL_H = """// Copyright 2026 tsapZ
 
 #pragma once
 
+#include <array>
 #include <span>
+#include <vector>
 #include "core/hle/service/ir/ir_user.h"
 
 namespace Service::IR {
 
-/// The Skylanders 3DS Portal of Power, which talks to the game over infrared. For now it logs
-/// what the game sends once AutoConnection connected it and answers from a table of replies
-/// (SKYLANDERS_PORTAL_REPLIES), to learn the protocol.
+/// The Skylanders 3DS Portal of Power, which talks to the game over infrared once AutoConnection
+/// connected it. Every packet from the game is the portal light's colour (r g b) and then a
+/// console portal command (R, A, C, S, Q, W); the device answers like skylanders-portal's
+/// SoftwarePortal, with a figure on slot 0 from the files SKYLANDERS_PORTAL_FIGURE names (paths
+/// separated by ';', read once, never written: what the game writes stays in memory). The game
+/// reconnects after reading a figure; then the next one in the list stands on the portal, as if
+/// the player had swapped them. To try other answers, SKYLANDERS_PORTAL_REPLIES names a table of
+/// hex replies that comes first. Everything is logged (Service.IR, Info), to learn the protocol.
 class SkylandersPortal final : public IRDevice {
 public:
     explicit SkylandersPortal(SendFunc send_func);
@@ -33,7 +43,21 @@ public:
     void OnReceive(std::span<const u8> data) override;
 
 private:
+    bool ReplyFromTable(std::span<const u8> data);
+    void Answer(std::span<const u8> command);
+    void Reply(const std::vector<u8>& reply);
+    bool Logged() const;
+
     u32 received_packets = 0;
+    bool active = false;
+    u8 counter = 0;
+    bool figures_loaded = false;
+    std::vector<std::array<u8, 1024>> figures;  // SKYLANDERS_PORTAL_FIGURE, in order
+    size_t current = 0;                         // the one on slot 0
+    int reads = 0;                              // its blocks the game has read
+    bool present = false;   // a figure on slot 0
+    u8 state = 0;           // its status bits: 0 empty, 1 on, 3 just put on
+    int added_reports = 0;  // status reports still to say "just put on"
 };
 
 } // namespace Service::IR
@@ -47,6 +71,7 @@ PORTAL_CPP = """// Copyright 2026 tsapZ
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
@@ -76,6 +101,9 @@ std::vector<u8> ParseHex(const std::string& text) {
     return bytes;
 }
 
+// Status reports that say "just put on" before "on" (skylanders-portal's kAddedReports).
+constexpr int kAddedReports = 8;
+
 } // namespace
 
 SkylandersPortal::SkylandersPortal(SendFunc send_func) : IRDevice(std::move(send_func)) {}
@@ -84,6 +112,45 @@ SkylandersPortal::~SkylandersPortal() = default;
 
 void SkylandersPortal::OnConnect() {
     received_packets = 0;
+    if (!figures_loaded) {
+        figures_loaded = true;
+        const char* list = std::getenv("SKYLANDERS_PORTAL_FIGURE");
+        std::string paths = list ? list : "";
+        size_t start = 0;
+        while (start < paths.size()) {
+            size_t end = paths.find(';', start);
+            if (end == std::string::npos) {
+                end = paths.size();
+            }
+            const std::string path = paths.substr(start, end - start);
+            start = end + 1;
+            if (path.empty()) {
+                continue;
+            }
+            std::ifstream in(path, std::ios::binary);
+            const std::vector<char> bytes{std::istreambuf_iterator<char>(in),
+                                          std::istreambuf_iterator<char>()};
+            const bool ok = bytes.size() == 1024;
+            if (ok) {
+                std::array<u8, 1024>& figure = figures.emplace_back();
+                std::copy(bytes.begin(), bytes.end(), figure.begin());
+            }
+            LOG_INFO(Service_IR, "Skylanders portal: figure file {}: {}", path,
+                     ok ? "figure " + std::to_string(figures.size())
+                        : std::string("not a 1024-byte figure, left out"));
+        }
+    } else if (reads > 0 && current + 1 < figures.size()) {
+        // The game reconnects after it has read a figure: now the next one stands on the portal.
+        ++current;
+        reads = 0;
+        LOG_INFO(Service_IR, "Skylanders portal: figure {} of {} on slot 0 now", current + 1,
+                 figures.size());
+    }
+    present = current < figures.size();
+    // Each connection starts over: the game activates the portal again, which announces the
+    // figure as just put on.
+    active = false;
+    state = 0;
     LOG_INFO(Service_IR, "Skylanders portal: connected");
 }
 
@@ -92,20 +159,42 @@ void SkylandersPortal::OnDisconnect() {
              received_packets);
 }
 
+bool SkylandersPortal::Logged() const {
+    // Every packet for the first 200, then every 50th: the protocol without a huge log.
+    return received_packets <= 200 || received_packets % 50 == 0;
+}
+
+void SkylandersPortal::Reply(const std::vector<u8>& reply) {
+    if (Logged()) {
+        LOG_INFO(Service_IR, "Skylanders portal: replying {} bytes: {:02x}", reply.size(),
+                 fmt::join(reply, " "));
+    }
+    Send(reply);
+}
+
 void SkylandersPortal::OnReceive(std::span<const u8> data) {
     ++received_packets;
-    // Every packet for the first 200, then every 50th: the protocol without a huge log.
-    if (received_packets <= 200 || received_packets % 50 == 0) {
+    if (Logged()) {
         LOG_INFO(Service_IR, "Skylanders portal: the game sent {} bytes (packet {}): {:02x}",
                  data.size(), received_packets, fmt::join(data, " "));
     }
-    // To learn the protocol: SKYLANDERS_PORTAL_REPLIES names a text file of "<request> => <reply>"
-    // lines in hex ('#' starts a comment). The first line whose request starts this packet gives
-    // the reply, sent back at once; read again for every packet, so it can change while the game
-    // runs. Without the file the portal stays silent.
+    if (ReplyFromTable(data)) {
+        return;
+    }
+    // Every packet starts with the portal light's colour (r g b: ff ff ff at first, then what the
+    // last C set, e.g. 00 00 5b), then the command.
+    if (data.size() > 3) {
+        Answer(data.subspan(3));
+    }
+}
+
+// SKYLANDERS_PORTAL_REPLIES names a text file of "<request> => <reply>" lines in hex ('#' starts a
+// comment). The first line whose request starts this packet gives the reply (an empty one: none);
+// read again for every packet, so it can change while the game runs.
+bool SkylandersPortal::ReplyFromTable(std::span<const u8> data) {
     const char* path = std::getenv("SKYLANDERS_PORTAL_REPLIES");
     if (!path) {
-        return;
+        return false;
     }
     std::ifstream in(path);
     std::string line;
@@ -123,14 +212,71 @@ void SkylandersPortal::OnReceive(std::span<const u8> data) {
             continue;
         }
         const std::vector<u8> reply = ParseHex(line.substr(arrow + 2));
-        if (received_packets <= 200 || received_packets % 50 == 0) {
-            LOG_INFO(Service_IR, "Skylanders portal: replying {} bytes: {:02x}", reply.size(),
-                     fmt::join(reply, " "));
-        }
         if (!reply.empty()) {
-            Send(reply);
+            Reply(reply);
         }
+        return true;
+    }
+    return false;
+}
+
+// As skylanders-portal's SoftwarePortal answers a console game, one figure on slot 0.
+void SkylandersPortal::Answer(std::span<const u8> command) {
+    if (command.empty()) {
         return;
+    }
+    switch (command[0]) {
+    case 'R': // ready: a Trap Team portal, as the USB ones answer
+        Reply({0x52, 0x02, 0x1b});
+        break;
+    case 'A': { // activate (argument != 0) or deactivate
+        const u8 argument = command.size() > 1 ? command[1] : 0;
+        const bool activate = argument != 0;
+        if (activate && !active && present) {
+            state = 3; // reported as just put on when the portal turns on
+            added_reports = kAddedReports;
+        } else if (!activate) {
+            state = 0; // the figure stays, it just isn't reported
+        }
+        active = activate;
+        Reply({0x41, argument, 0xff, 0x77});
+        break;
+    }
+    case 'S': { // status: two bits a slot, a counter, whether the portal is on
+        const u8 slot0 = active ? state : 0;
+        Reply({0x53, slot0, 0, 0, 0, counter++, static_cast<u8>(active ? 1 : 0)});
+        if (state == 3 && --added_reports <= 0) {
+            state = 1;
+        }
+        break;
+    }
+    case 'Q': { // read a block: 51, 0x10 | slot when there is a figure, the block, 16 bytes
+        const u8 slot = command.size() > 1 ? static_cast<u8>(command[1] & 0x0f) : 0;
+        const u8 block = command.size() > 2 ? command[2] : 0;
+        std::vector<u8> out{0x51, slot, block};
+        out.resize(3 + 16);
+        if (slot == 0 && present && block < 64) {
+            out[1] |= 0x10;
+            std::copy_n(figures[current].begin() + block * 16, 16, out.begin() + 3);
+            ++reads;
+        }
+        Reply(out);
+        break;
+    }
+    case 'W': { // write a block: kept in memory only, the file is never written
+        const u8 slot = command.size() > 1 ? static_cast<u8>(command[1] & 0x0f) : 0;
+        const u8 block = command.size() > 2 ? command[2] : 0;
+        std::vector<u8> out{0x57, slot, block};
+        if (slot == 0 && present && block < 64 && command.size() >= 3 + 16) {
+            out[1] |= 0x10;
+            std::copy_n(command.begin() + 3, 16, figures[current].begin() + block * 16);
+            LOG_INFO(Service_IR, "Skylanders portal: the game wrote block {}", block);
+        }
+        Reply(out);
+        break;
+    }
+    default: // C (the light) and the rest: no answer
+        break;
     }
 }
 
