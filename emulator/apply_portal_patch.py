@@ -2,8 +2,8 @@
 
 ir:USER's AutoConnection (0x0007), which the Skylanders 3DS games call at "Aim at the PORTAL OF POWER", connects a
 new infrared device, SkylandersPortal, the way RequireConnection connects the Circle Pad Pro; SendIrNop then goes to
-the connected device instead of always to the Circle Pad Pro. The device only logs what the game sends for now
-(Service.IR, Info), to learn the protocol. GetConnectionStatus (0x0013) and GetConnectionRole (0x0017) answer from
+the connected device instead of always to the Circle Pad Pro. The device logs what the game sends (Service.IR, Info)
+and, to learn the protocol, answers from a table of hex replies named by SKYLANDERS_PORTAL_REPLIES (none without it). GetConnectionStatus (0x0013) and GetConnectionRole (0x0017) answer from
 the shared memory header. All edits are checked before anything is written; a second run changes nothing.
 The new files are under Azahar's license (GPLv2 or later), as part of it. Stdlib only."""
 import pathlib
@@ -20,8 +20,9 @@ PORTAL_H = """// Copyright 2026 tsapZ
 
 namespace Service::IR {
 
-/// The Skylanders 3DS Portal of Power, which talks to the game over infrared. For now it only
-/// logs what the game sends once AutoConnection connected it, to learn the protocol.
+/// The Skylanders 3DS Portal of Power, which talks to the game over infrared. For now it logs
+/// what the game sends once AutoConnection connected it and answers from a table of replies
+/// (SKYLANDERS_PORTAL_REPLIES), to learn the protocol.
 class SkylandersPortal final : public IRDevice {
 public:
     explicit SkylandersPortal(SendFunc send_func);
@@ -42,12 +43,40 @@ PORTAL_CPP = """// Copyright 2026 tsapZ
 // Licensed under GPLv2 or any later version (part of Azahar)
 // Refer to the license.txt file included.
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <fstream>
+#include <string>
 #include <utility>
+#include <vector>
 #include <fmt/ranges.h>
 #include "common/logging/log.h"
 #include "core/hle/service/ir/skylanders_portal.h"
 
 namespace Service::IR {
+
+namespace {
+
+// "ff ff ff 52 00" -> its bytes; stops at the first token that isn't a hex byte.
+std::vector<u8> ParseHex(const std::string& text) {
+    std::vector<u8> bytes;
+    size_t at = 0;
+    while (at < text.size()) {
+        while (at < text.size() && std::isspace(static_cast<unsigned char>(text[at]))) {
+            ++at;
+        }
+        if (at + 1 >= text.size() || !std::isxdigit(static_cast<unsigned char>(text[at])) ||
+            !std::isxdigit(static_cast<unsigned char>(text[at + 1]))) {
+            break;
+        }
+        bytes.push_back(static_cast<u8>(std::stoul(text.substr(at, 2), nullptr, 16)));
+        at += 2;
+    }
+    return bytes;
+}
+
+} // namespace
 
 SkylandersPortal::SkylandersPortal(SendFunc send_func) : IRDevice(std::move(send_func)) {}
 
@@ -69,6 +98,39 @@ void SkylandersPortal::OnReceive(std::span<const u8> data) {
     if (received_packets <= 200 || received_packets % 50 == 0) {
         LOG_INFO(Service_IR, "Skylanders portal: the game sent {} bytes (packet {}): {:02x}",
                  data.size(), received_packets, fmt::join(data, " "));
+    }
+    // To learn the protocol: SKYLANDERS_PORTAL_REPLIES names a text file of "<request> => <reply>"
+    // lines in hex ('#' starts a comment). The first line whose request starts this packet gives
+    // the reply, sent back at once; read again for every packet, so it can change while the game
+    // runs. Without the file the portal stays silent.
+    const char* path = std::getenv("SKYLANDERS_PORTAL_REPLIES");
+    if (!path) {
+        return;
+    }
+    std::ifstream in(path);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        const size_t arrow = line.find("=>");
+        if (arrow == std::string::npos) {
+            continue;
+        }
+        const std::vector<u8> request = ParseHex(line.substr(0, arrow));
+        if (request.empty() || request.size() > data.size() ||
+            !std::equal(request.begin(), request.end(), data.begin())) {
+            continue;
+        }
+        const std::vector<u8> reply = ParseHex(line.substr(arrow + 2));
+        if (received_packets <= 200 || received_packets % 50 == 0) {
+            LOG_INFO(Service_IR, "Skylanders portal: replying {} bytes: {:02x}", reply.size(),
+                     fmt::join(reply, " "));
+        }
+        if (!reply.empty()) {
+            Send(reply);
+        }
+        return;
     }
 }
 
