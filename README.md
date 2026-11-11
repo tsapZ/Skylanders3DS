@@ -8,16 +8,21 @@ emulator core with what the games need added to it, started from Core of Light (
 
 Nothing of the games is in this repository: no ROMs, no screenshots, no artwork.
 
-## Where it stands (2026-11-10)
+## Where it stands (2026-11-11)
 
-- Azahar (the merge of Lime3DS and Citra, GPLv2 or later) runs Spyro's Adventure 3DS and Giants 3DS
-  at full speed (60 FPS) up to the point where the game wants the portal.
-- Giants 3DS then opens the infrared service ir:USER and calls `AutoConnection`, which Azahar
-  doesn't implement, so the game waits at "Aim at the PORTAL OF POWER".
-- Azahar already has the pieces for an infrared device (the Circle Pad Pro is one): the portal can
-  be another, connected through `AutoConnection`.
+- **Giants 3DS is playable with figures** in Azahar (the merge of Lime3DS and Citra, GPLv2 or later)
+  with this repository's patch (`emulator/apply_portal_patch.py`): `AutoConnection` connects an
+  emulated infrared portal that answers the game as a console portal does; the game takes the
+  figures into its crystals and plays.
+- The protocol: every infrared packet is the portal light's colour (r g b) and then a console portal
+  command (R, A, C, S, Q, W); the game asks for the status (S) itself.
+- In the patched Azahar: File > Skylanders Portal > Place figure... puts a figure file on the portal
+  (the 1024-byte files of Documents\Skylanders\Figures; the file is never written), Lift figure off
+  takes it away. Scripted runs name figure files in `SKYLANDERS_PORTAL_FIGURE` (separated by `;`).
+- Spyro's Adventure 3DS runs up to its language screen; the other three games aren't dumped yet.
 
-Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md). Plan: [docs/plan.md](docs/plan.md).
+Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md),
+[docs/findings-2026-11-11.md](docs/findings-2026-11-11.md). Plan: [docs/plan.md](docs/plan.md).
 
 ## Tools
 
@@ -25,6 +30,9 @@ Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md). Plan: [docs
   window every few seconds and its log.
 - `tools/azahar_taps.ps1`: the same with taps and key presses posted to Azahar's window, so a
   scripted run gets past menus without the real mouse or keyboard.
+- `tools/make_blank_figure.py`: an empty figure file of a toy (as skylanders-portal makes them), for
+  tests without anyone's own figures; `tools/make_reply_table.py`: a reply table for experiments
+  (`SKYLANDERS_PORTAL_REPLIES`).
 
 ## License
 

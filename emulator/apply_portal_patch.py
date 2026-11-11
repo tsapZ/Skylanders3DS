@@ -19,20 +19,48 @@ PORTAL_H = """// Copyright 2026 tsapZ
 #pragma once
 
 #include <array>
+#include <mutex>
 #include <span>
+#include <string>
 #include <vector>
 #include "core/hle/service/ir/ir_user.h"
 
 namespace Service::IR {
 
+/// The figure on the Skylanders portal (slot 0), shared by the frontend (Skylanders > Place
+/// figure...) and the portal device. The file is read once and never written: what the game
+/// writes stays in memory.
+class SkylandersPortalFigure {
+public:
+    static SkylandersPortalFigure& Instance();
+
+    /// Reads a 1024-byte figure file and puts it on the portal; the one there before is lifted.
+    bool Place(const std::string& path);
+    void Remove();
+    /// The file on the portal, empty without one.
+    std::string Path() const;
+    bool Present() const;
+    /// Changes with every Place / Remove, so the device can tell the game.
+    u32 Generation() const;
+    std::array<u8, 1024> Data() const;
+    void WriteBlock(u8 block, std::span<const u8> bytes);
+
+private:
+    mutable std::mutex mutex;
+    std::string path;
+    std::array<u8, 1024> data{};
+    bool present = false;
+    u32 generation = 0;
+};
+
 /// The Skylanders 3DS Portal of Power, which talks to the game over infrared once AutoConnection
 /// connected it. Every packet from the game is the portal light's colour (r g b) and then a
 /// console portal command (R, A, C, S, Q, W); the device answers like skylanders-portal's
-/// SoftwarePortal, with a figure on slot 0 from the files SKYLANDERS_PORTAL_FIGURE names (paths
-/// separated by ';', read once, never written: what the game writes stays in memory). The game
-/// reconnects after reading a figure; then the next one in the list stands on the portal, as if
-/// the player had swapped them. To try other answers, SKYLANDERS_PORTAL_REPLIES names a table of
-/// hex replies that comes first. Everything is logged (Service.IR, Info), to learn the protocol.
+/// SoftwarePortal, with the figure SkylandersPortalFigure holds on slot 0. For scripted runs
+/// SKYLANDERS_PORTAL_FIGURE names figure files (paths separated by ';'): the first goes on at the
+/// first connection, and after the game has read one and reconnects, the next. To try other
+/// answers, SKYLANDERS_PORTAL_REPLIES names a table of hex replies that comes first. Everything is
+/// logged (Service.IR, Info), to learn the protocol.
 class SkylandersPortal final : public IRDevice {
 public:
     explicit SkylandersPortal(SendFunc send_func);
@@ -47,17 +75,19 @@ private:
     void Answer(std::span<const u8> command);
     void Reply(const std::vector<u8>& reply);
     bool Logged() const;
+    u8 SlotState();
 
     u32 received_packets = 0;
     bool active = false;
     u8 counter = 0;
-    bool figures_loaded = false;
-    std::vector<std::array<u8, 1024>> figures;  // SKYLANDERS_PORTAL_FIGURE, in order
-    size_t current = 0;                         // the one on slot 0
-    int reads = 0;                              // its blocks the game has read
-    bool present = false;   // a figure on slot 0
-    u8 state = 0;           // its status bits: 0 empty, 1 on, 3 just put on
-    int added_reports = 0;  // status reports still to say "just put on"
+    bool list_loaded = false;
+    std::vector<std::string> list;  // SKYLANDERS_PORTAL_FIGURE, in order
+    size_t current = 0;             // the list's figure on the portal
+    int reads = 0;                  // blocks the game has read since the figure went on
+    u32 seen_generation = 0;        // SkylandersPortalFigure's, as last reported
+    bool lifting = false;           // the next status says the old figure is being lifted
+    u8 state = 0;                   // slot 0's status bits: 0 empty, 1 on, 2 lifted, 3 just put on
+    int added_reports = 0;          // status reports still to say "just put on"
 };
 
 } // namespace Service::IR
@@ -70,6 +100,7 @@ PORTAL_CPP = """// Copyright 2026 tsapZ
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -106,50 +137,99 @@ constexpr int kAddedReports = 8;
 
 } // namespace
 
+SkylandersPortalFigure& SkylandersPortalFigure::Instance() {
+    static SkylandersPortalFigure figure;
+    return figure;
+}
+
+bool SkylandersPortalFigure::Place(const std::string& file) {
+    // A UTF-8 path (the frontend's file dialog; the scripted list is plain ASCII).
+    std::ifstream in(std::filesystem::path(std::u8string(file.begin(), file.end())), std::ios::binary);
+    const std::vector<char> bytes{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    if (bytes.size() != 1024) {
+        LOG_WARNING(Service_IR, "Skylanders portal: {} is not a 1024-byte figure file", file);
+        return false;
+    }
+    std::scoped_lock lock{mutex};
+    std::copy(bytes.begin(), bytes.end(), data.begin());
+    path = file;
+    present = true;
+    ++generation;
+    LOG_INFO(Service_IR, "Skylanders portal: figure on the portal: {}", file);
+    return true;
+}
+
+void SkylandersPortalFigure::Remove() {
+    std::scoped_lock lock{mutex};
+    present = false;
+    path.clear();
+    ++generation;
+    LOG_INFO(Service_IR, "Skylanders portal: figure lifted off");
+}
+
+std::string SkylandersPortalFigure::Path() const {
+    std::scoped_lock lock{mutex};
+    return path;
+}
+
+bool SkylandersPortalFigure::Present() const {
+    std::scoped_lock lock{mutex};
+    return present;
+}
+
+u32 SkylandersPortalFigure::Generation() const {
+    std::scoped_lock lock{mutex};
+    return generation;
+}
+
+std::array<u8, 1024> SkylandersPortalFigure::Data() const {
+    std::scoped_lock lock{mutex};
+    return data;
+}
+
+void SkylandersPortalFigure::WriteBlock(u8 block, std::span<const u8> bytes) {
+    std::scoped_lock lock{mutex};
+    if (present && block < 64 && bytes.size() >= 16) {
+        std::copy_n(bytes.begin(), 16, data.begin() + block * 16);
+    }
+}
+
 SkylandersPortal::SkylandersPortal(SendFunc send_func) : IRDevice(std::move(send_func)) {}
 
 SkylandersPortal::~SkylandersPortal() = default;
 
 void SkylandersPortal::OnConnect() {
     received_packets = 0;
-    if (!figures_loaded) {
-        figures_loaded = true;
-        const char* list = std::getenv("SKYLANDERS_PORTAL_FIGURE");
-        std::string paths = list ? list : "";
+    SkylandersPortalFigure& figure = SkylandersPortalFigure::Instance();
+    if (!list_loaded) {
+        list_loaded = true;
+        const char* paths = std::getenv("SKYLANDERS_PORTAL_FIGURE");
+        const std::string text = paths ? paths : "";
         size_t start = 0;
-        while (start < paths.size()) {
-            size_t end = paths.find(';', start);
+        while (start < text.size()) {
+            size_t end = text.find(';', start);
             if (end == std::string::npos) {
-                end = paths.size();
+                end = text.size();
             }
-            const std::string path = paths.substr(start, end - start);
+            if (end > start) {
+                list.push_back(text.substr(start, end - start));
+            }
             start = end + 1;
-            if (path.empty()) {
-                continue;
-            }
-            std::ifstream in(path, std::ios::binary);
-            const std::vector<char> bytes{std::istreambuf_iterator<char>(in),
-                                          std::istreambuf_iterator<char>()};
-            const bool ok = bytes.size() == 1024;
-            if (ok) {
-                std::array<u8, 1024>& figure = figures.emplace_back();
-                std::copy(bytes.begin(), bytes.end(), figure.begin());
-            }
-            LOG_INFO(Service_IR, "Skylanders portal: figure file {}: {}", path,
-                     ok ? "figure " + std::to_string(figures.size())
-                        : std::string("not a 1024-byte figure, left out"));
         }
-    } else if (reads > 0 && current + 1 < figures.size()) {
-        // The game reconnects after it has read a figure: now the next one stands on the portal.
+        if (!list.empty() && !figure.Present()) {
+            figure.Place(list[0]);
+        }
+    } else if (reads > 0 && current + 1 < list.size()) {
+        // The game reconnects after it has read a figure: now the list's next one stands there.
         ++current;
-        reads = 0;
-        LOG_INFO(Service_IR, "Skylanders portal: figure {} of {} on slot 0 now", current + 1,
-                 figures.size());
+        figure.Place(list[current]);
     }
-    present = current < figures.size();
     // Each connection starts over: the game activates the portal again, which announces the
     // figure as just put on.
+    reads = 0;
+    seen_generation = figure.Generation();
     active = false;
+    lifting = false;
     state = 0;
     LOG_INFO(Service_IR, "Skylanders portal: connected");
 }
@@ -220,11 +300,41 @@ bool SkylandersPortal::ReplyFromTable(std::span<const u8> data) {
     return false;
 }
 
-// As skylanders-portal's SoftwarePortal answers a console game, one figure on slot 0.
+// Slot 0's status bits for this report. A figure placed or lifted in the frontend meanwhile: the
+// one there before is reported as lifted once, then the new one as just put on (as a real portal
+// and skylanders-portal's SoftwarePortal do).
+u8 SkylandersPortal::SlotState() {
+    const SkylandersPortalFigure& figure = SkylandersPortalFigure::Instance();
+    const u32 generation = figure.Generation();
+    if (generation != seen_generation) {
+        seen_generation = generation;
+        reads = 0;
+        if (active) {
+            lifting = state != 0;
+            state = figure.Present() ? 3 : 0;
+            added_reports = kAddedReports;
+        }
+    }
+    if (!active) {
+        return 0;
+    }
+    if (lifting) {
+        lifting = false;
+        return 2;
+    }
+    const u8 now = state;
+    if (state == 3 && --added_reports <= 0) {
+        state = 1;
+    }
+    return now;
+}
+
+// As skylanders-portal's SoftwarePortal answers a console game, the figure on slot 0.
 void SkylandersPortal::Answer(std::span<const u8> command) {
     if (command.empty()) {
         return;
     }
+    SkylandersPortalFigure& figure = SkylandersPortalFigure::Instance();
     switch (command[0]) {
     case 'R': // ready: a Trap Team portal, as the USB ones answer
         Reply({0x52, 0x02, 0x1b});
@@ -232,22 +342,21 @@ void SkylandersPortal::Answer(std::span<const u8> command) {
     case 'A': { // activate (argument != 0) or deactivate
         const u8 argument = command.size() > 1 ? command[1] : 0;
         const bool activate = argument != 0;
-        if (activate && !active && present) {
+        if (activate && !active && figure.Present()) {
             state = 3; // reported as just put on when the portal turns on
             added_reports = kAddedReports;
         } else if (!activate) {
             state = 0; // the figure stays, it just isn't reported
         }
         active = activate;
+        seen_generation = figure.Generation();
+        lifting = false;
         Reply({0x41, argument, 0xff, 0x77});
         break;
     }
     case 'S': { // status: two bits a slot, a counter, whether the portal is on
-        const u8 slot0 = active ? state : 0;
+        const u8 slot0 = SlotState();
         Reply({0x53, slot0, 0, 0, 0, counter++, static_cast<u8>(active ? 1 : 0)});
-        if (state == 3 && --added_reports <= 0) {
-            state = 1;
-        }
         break;
     }
     case 'Q': { // read a block: 51, 0x10 | slot when there is a figure, the block, 16 bytes
@@ -255,9 +364,10 @@ void SkylandersPortal::Answer(std::span<const u8> command) {
         const u8 block = command.size() > 2 ? command[2] : 0;
         std::vector<u8> out{0x51, slot, block};
         out.resize(3 + 16);
-        if (slot == 0 && present && block < 64) {
+        if (slot == 0 && figure.Present() && block < 64) {
+            const std::array<u8, 1024> data = figure.Data();
             out[1] |= 0x10;
-            std::copy_n(figures[current].begin() + block * 16, 16, out.begin() + 3);
+            std::copy_n(data.begin() + block * 16, 16, out.begin() + 3);
             ++reads;
         }
         Reply(out);
@@ -267,9 +377,9 @@ void SkylandersPortal::Answer(std::span<const u8> command) {
         const u8 slot = command.size() > 1 ? static_cast<u8>(command[1] & 0x0f) : 0;
         const u8 block = command.size() > 2 ? command[2] : 0;
         std::vector<u8> out{0x57, slot, block};
-        if (slot == 0 && present && block < 64 && command.size() >= 3 + 16) {
+        if (slot == 0 && figure.Present() && block < 64 && command.size() >= 3 + 16) {
             out[1] |= 0x10;
-            std::copy_n(command.begin() + 3, 16, figures[current].begin() + block * 16);
+            figure.WriteBlock(block, command.subspan(3, 16));
             LOG_INFO(Service_IR, "Skylanders portal: the game wrote block {}", block);
         }
         Reply(out);
@@ -400,6 +510,89 @@ CMAKE_EDITS = [
      "    hle/service/ir/ir_user.h\n    hle/service/ir/skylanders_portal.cpp\n    hle/service/ir/skylanders_portal.h\n"),
 ]
 
+# The frontend: File > Skylanders Portal > Place figure... / Lift figure off, next to Amiibo, while a game runs.
+QT_UI_EDITS = [
+    (r"""    <widget class="QMenu" name="menu_Open_Folder">
+""",
+     r"""    <widget class="QMenu" name="menu_Skylanders">
+     <property name="title">
+      <string>Skylanders Portal</string>
+     </property>
+     <addaction name="action_Place_Skylander"/>
+     <addaction name="action_Lift_Skylander"/>
+    </widget>
+    <widget class="QMenu" name="menu_Open_Folder">
+"""),
+    (r"""    <addaction name="menu_Amiibo"/>
+""",
+     r"""    <addaction name="menu_Amiibo"/>
+    <addaction name="menu_Skylanders"/>
+"""),
+    (r"""  <action name="action_Open_Citra_Folder">
+""",
+     r"""  <action name="action_Place_Skylander">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Place figure...</string>
+   </property>
+  </action>
+  <action name="action_Lift_Skylander">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Lift figure off</string>
+   </property>
+  </action>
+  <action name="action_Open_Citra_Folder">
+"""),
+]
+
+QT_H_EDITS = [
+    ("    void OnRemoveAmiibo();\n",
+     "    void OnRemoveAmiibo();\n    void OnPlaceSkylander();\n    void OnLiftSkylander();\n"),
+]
+
+QT_CPP_EDITS = [
+    ('#include "core/hle/service/nfc/nfc.h"\n',
+     '#include "core/hle/service/ir/skylanders_portal.h"\n#include "core/hle/service/nfc/nfc.h"\n'),
+    ("    connect_menu(ui->action_Remove_Amiibo, &GMainWindow::OnRemoveAmiibo);\n",
+     "    connect_menu(ui->action_Remove_Amiibo, &GMainWindow::OnRemoveAmiibo);\n"
+     "    connect_menu(ui->action_Place_Skylander, &GMainWindow::OnPlaceSkylander);\n"
+     "    connect_menu(ui->action_Lift_Skylander, &GMainWindow::OnLiftSkylander);\n"),
+    ("        ui->action_Remove_Amiibo,\n",
+     "        ui->action_Remove_Amiibo,\n        ui->action_Place_Skylander,\n        ui->action_Lift_Skylander,\n"),
+    (r"""void GMainWindow::OnOpenCitraFolder() {
+""",
+     r"""// The Skylanders 3DS portal (core/hle/service/ir/skylanders_portal.h): a figure file onto it, the
+// one there before lifted off. The same 1024-byte files the Xbox 360 ports keep in
+// Documents\Skylanders\Figures; the file itself is never written.
+void GMainWindow::OnPlaceSkylander() {
+    const QString start = QDir(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation))
+                              .filePath(QStringLiteral("Skylanders/Figures"));
+    const QString filter = tr("Skylanders figure") + QStringLiteral(" (*.dump *.bin *.sky);;") +
+                           tr("All Files") + QStringLiteral(" (*.*)");
+    const QString filename =
+        QFileDialog::getOpenFileName(this, tr("Place a figure on the portal"), start, filter);
+    if (filename.isEmpty()) {
+        return;
+    }
+    if (!Service::IR::SkylandersPortalFigure::Instance().Place(filename.toStdString())) {
+        QMessageBox::warning(this, tr("Skylanders Portal"),
+                             tr("\"%1\" isn't a figure file (1024 bytes).").arg(filename));
+    }
+}
+
+void GMainWindow::OnLiftSkylander() {
+    Service::IR::SkylandersPortalFigure::Instance().Remove();
+}
+
+void GMainWindow::OnOpenCitraFolder() {
+"""),
+]
+
 
 def plan(path, edits):
     raw = path.read_bytes()
@@ -421,7 +614,10 @@ def main():
     ir = root / "src" / "core" / "hle" / "service" / "ir"
     work = []
     for path, edits in ((ir / "ir_user.h", H_EDITS), (ir / "ir_user.cpp", CPP_EDITS),
-                        (root / "src" / "core" / "CMakeLists.txt", CMAKE_EDITS)):
+                        (root / "src" / "core" / "CMakeLists.txt", CMAKE_EDITS),
+                        (root / "src" / "citra_qt" / "main.ui", QT_UI_EDITS),
+                        (root / "src" / "citra_qt" / "citra_qt.h", QT_H_EDITS),
+                        (root / "src" / "citra_qt" / "citra_qt.cpp", QT_CPP_EDITS)):
         text, crlf = plan(path, edits)
         work.append((path, text, crlf))
     for path, text, crlf in work:
