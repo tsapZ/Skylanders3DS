@@ -34,6 +34,10 @@ Nothing of the games is in this repository: no ROMs, no screenshots, no artwork.
     scripted runs).
 
   So all five 3DS games now play with figures.
+- **Both screens on a monitor:** Azahar's large screen layout with the touch screen bottom right at
+  proportion 2.5 (big enough to hit its buttons with the mouse) is the default for a 16:9 monitor;
+  F10 switches to the other layouts (side by side, single screen, a second window for a second
+  monitor). Why: [docs/plan.md](docs/plan.md) step 5.
 
 Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md),
 [docs/findings-2026-11-11.md](docs/findings-2026-11-11.md),
@@ -43,8 +47,9 @@ Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md),
 
 - `tools/azahar_probe.ps1`: starts a game in a portable Azahar (muted, no update check), saves its
   window every few seconds and its log.
-- `tools/azahar_taps.ps1`: the same with taps and key presses posted to Azahar's window, so a
-  scripted run gets past menus without the real mouse or keyboard.
+- `tools/azahar_taps.ps1`: the same with taps and key presses posted to Azahar's window (F-keys
+  too, F10 the next layout), so a scripted run gets past menus without the real mouse or keyboard;
+  it uses the default layout, which its tap positions are measured on.
 - `tools/ir_log_summary.py`: what a game and the emulated portal said to each other in one run
   (commands and counts, blocks read and written, light colours, the first packets with replies).
 - `tools/make_blank_figure.py`: an empty figure file of a toy (as skylanders-portal makes them), for

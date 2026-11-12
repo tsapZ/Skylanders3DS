@@ -38,6 +38,17 @@ Each step ends with something that can be tried; the next one only starts when i
    controller layout like the console games', the portal menu (skylanders-portal's) for putting
    figures on. From CoL #72 (a player's ideas): a key that switches the layout (both, swapped, only
    one), the touch screen on a second monitor; later perhaps a phone or tablet as the touch screen.
+
+   Azahar has most of it built in: layouts 0-6 (default: top over touch; single screen; large screen
+   with the touch screen small beside it; side by side; separate windows, for a second monitor;
+   hybrid; custom), F10 to the next, F8 upright, the mouse as the touch screen, our File > Skylanders
+   Portal menu. Pictures of all of them with Swap Force 3DS (2026-11-12): single screen is out (the
+   games ask to tap the touch screen, e.g. an element), default and side by side leave much of a 16:9
+   monitor empty. **The default for a 16:9 monitor: large screen (layout_option 2), the touch screen
+   bottom right (small_screen_position 2) at proportion 2.5** instead of Azahar's 4, so its buttons
+   are big enough to hit with the mouse (a top screen about 3.6x the 3DS's 400x240 on a 1920x1080
+   window, the touch screen about 1.5x). The scripted runs keep layout 0 (tools/azahar_taps.ps1 sets
+   it: the tap positions are measured there).
 6. **Core of Light.** A tab "Xbox 360 | 3DS" at the top; the 3DS games set up from the player's own
    dumps (decrypted CCI/CIA), their settings and figures as for the console games.
    - **Recognising a dump**, as tools/code_services.py reads it:

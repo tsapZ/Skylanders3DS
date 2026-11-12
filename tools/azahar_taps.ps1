@@ -13,7 +13,9 @@ $ini = Join-Path $az "user\config\qt-config.ini"
 $out = if ($Out) { $Out } else { Join-Path $dev "runs\3ds\$Name" }
 New-Item -ItemType Directory -Force $out | Out-Null
 $text = [IO.File]::ReadAllText($ini)
-foreach ($kv in @(@('volume', '0'), @('check_for_update_on_start', 'false'), @('firstStart', 'false'), @('confirmClose', 'false'), @('log_filter', $Filter))) {
+# layout_option 0 (top screen above the touch screen): the tap positions are measured on it, whatever layout the
+# owner uses.
+foreach ($kv in @(@('volume', '0'), @('check_for_update_on_start', 'false'), @('firstStart', 'false'), @('confirmClose', 'false'), @('log_filter', $Filter), @('layout_option', '0'))) {
   $k = [regex]::Escape($kv[0])
   $text = [regex]::Replace($text, "(?m)^$k\\default=true\r?$", "$($kv[0])\default=false")
   $text = [regex]::Replace($text, "(?m)^$k=[^\r\n]*", "$($kv[0])=$($kv[1])")
