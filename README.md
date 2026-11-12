@@ -8,7 +8,7 @@ emulator core with what the games need added to it, started from Core of Light (
 
 Nothing of the games is in this repository: no ROMs, no screenshots, no artwork.
 
-## Where it stands (2026-11-11)
+## Where it stands (2026-11-12)
 
 - **Giants 3DS is playable with figures** in Azahar (the merge of Lime3DS and Citra, GPLv2 or later)
   with this repository's patch (`emulator/apply_portal_patch.py`): `AutoConnection` connects an
@@ -19,10 +19,14 @@ Nothing of the games is in this repository: no ROMs, no screenshots, no artwork.
 - In the patched Azahar: File > Skylanders Portal > Place figure... puts a figure file on the portal
   (the 1024-byte files of Documents\Skylanders\Figures; the file is never written), Lift figure off
   takes it away. Scripted runs name figure files in `SKYLANDERS_PORTAL_FIGURE` (separated by `;`).
-- Spyro's Adventure 3DS runs up to its language screen; the other three games aren't dumped yet.
+- Spyro's Adventure, Swap Force, Trap Team and SuperChargers Racing 3DS run up to their language
+  screens. Trap Team stopped at once in every Azahar ("Won't boot"): it runs an ARM-mode CPS, which
+  Azahar's CPU core can't translate; `emulator/apply_cps_nop.py` makes it a no-op, as the CPU does
+  in user mode.
 
 Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md),
-[docs/findings-2026-11-11.md](docs/findings-2026-11-11.md). Plan: [docs/plan.md](docs/plan.md).
+[docs/findings-2026-11-11.md](docs/findings-2026-11-11.md),
+[docs/findings-2026-11-12.md](docs/findings-2026-11-12.md). Plan: [docs/plan.md](docs/plan.md).
 
 ## Tools
 
