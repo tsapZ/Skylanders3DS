@@ -19,12 +19,12 @@ Nothing of the games is in this repository: no ROMs, no screenshots, no artwork.
 - In the patched Azahar: File > Skylanders Portal > Place figure... puts a figure file on the portal
   (the 1024-byte files of Documents\Skylanders\Figures; the file is never written), Lift figure off
   takes it away. Scripted runs name figure files in `SKYLANDERS_PORTAL_FIGURE` (separated by `;`).
-- **Swap Force 3DS is playable with figures** too: it speaks the same portal protocol as Giants and
-  plays with the same emulated portal, unchanged.
+- **Swap Force and Trap Team 3DS are playable with figures** too: they speak the same portal
+  protocol as Giants and play with the same emulated portal, unchanged.
 - Trap Team 3DS stopped at once in every Azahar ("Won't boot"): it runs an ARM-mode CPS, which
   Azahar's CPU core can't translate; `emulator/apply_cps_nop.py` makes it a no-op, as the CPU does
-  in user mode. It now runs to its menus. SuperChargers Racing 3DS runs to its driver select;
-  Spyro's Adventure 3DS to its language screen.
+  in user mode. SuperChargers Racing 3DS runs to its driver select without asking for the portal
+  yet; Spyro's Adventure 3DS to its language screen.
 
 Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md),
 [docs/findings-2026-11-11.md](docs/findings-2026-11-11.md),
