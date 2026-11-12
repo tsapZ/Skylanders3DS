@@ -4,7 +4,8 @@ ir:USER's AutoConnection (0x0007), which the Skylanders 3DS games call at "Aim a
 new infrared device, SkylandersPortal, the way RequireConnection connects the Circle Pad Pro; SendIrNop then goes to
 the connected device instead of always to the Circle Pad Pro. Every packet the game sends is ff ff ff and a console
 portal command; the device answers them as skylanders-portal's SoftwarePortal answers a console game (R, A, S with a
-counter, Q, W), with one figure on slot 0 from the file SKYLANDERS_PORTAL_FIGURE names (never written back). For
+counter, Q, W), with one figure on slot 0 from the file SKYLANDERS_PORTAL_FIGURE names (never written back);
+SKYLANDERS_PORTAL_SCRIPT lifts and places toys at given seconds in scripted runs. For
 experiments a table of hex replies named by SKYLANDERS_PORTAL_REPLIES comes first. Everything is logged (Service.IR,
 Info). GetConnectionStatus (0x0013) and GetConnectionRole (0x0017) answer from the shared memory header. All edits
 are checked before anything is written; a second run changes nothing.
@@ -19,9 +20,11 @@ PORTAL_H = """// Copyright 2026 tsapZ
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <mutex>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 #include "core/hle/service/ir/ir_user.h"
 
@@ -58,9 +61,13 @@ private:
 /// console portal command (R, A, C, S, Q, W); the device answers like skylanders-portal's
 /// SoftwarePortal, with the figure SkylandersPortalFigure holds on slot 0. For scripted runs
 /// SKYLANDERS_PORTAL_FIGURE names figure files (paths separated by ';'): the first goes on at the
-/// first connection, and after the game has read one and reconnects, the next. To try other
-/// answers, SKYLANDERS_PORTAL_REPLIES names a table of hex replies that comes first. Everything is
-/// logged (Service.IR, Info), to learn the protocol.
+/// first connection, and after the game has read one and reconnects, the next.
+/// SKYLANDERS_PORTAL_SCRIPT times toys for scripted runs: "<seconds>:lift" or "<seconds>:place
+/// <file>", separated by ';', in seconds since the device was made (the emulated system's start),
+/// each done with the first packet or connection after its time (SuperChargers Racing waits with
+/// "Wrong toy!" until a vehicle is lifted off its driver tab). To try other answers,
+/// SKYLANDERS_PORTAL_REPLIES names a table of hex replies that comes first. Everything is logged
+/// (Service.IR, Info), to learn the protocol.
 class SkylandersPortal final : public IRDevice {
 public:
     explicit SkylandersPortal(SendFunc send_func);
@@ -72,6 +79,7 @@ public:
 
 private:
     bool ReplyFromTable(std::span<const u8> data);
+    void RunScript();
     void Answer(std::span<const u8> command);
     void Reply(const std::vector<u8>& reply);
     bool Logged() const;
@@ -88,6 +96,10 @@ private:
     bool lifting = false;           // the next status says the old figure is being lifted
     u8 state = 0;                   // slot 0's status bits: 0 empty, 1 on, 2 lifted, 3 just put on
     int added_reports = 0;          // status reports still to say "just put on"
+    bool script_loaded = false;
+    std::vector<std::pair<double, std::string>> script;  // SKYLANDERS_PORTAL_SCRIPT: (seconds, action)
+    size_t script_next = 0;                              // the first action not done yet
+    std::chrono::steady_clock::time_point made = std::chrono::steady_clock::now();
 };
 
 } // namespace Service::IR
@@ -103,6 +115,7 @@ PORTAL_CPP = """// Copyright 2026 tsapZ
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -198,8 +211,52 @@ SkylandersPortal::SkylandersPortal(SendFunc send_func) : IRDevice(std::move(send
 
 SkylandersPortal::~SkylandersPortal() = default;
 
+void SkylandersPortal::RunScript() {
+    if (!script_loaded) {
+        script_loaded = true;
+        const char* env = std::getenv("SKYLANDERS_PORTAL_SCRIPT");
+        const std::string text = env ? env : "";
+        size_t start = 0;
+        while (start < text.size()) {
+            size_t end = text.find(';', start);
+            if (end == std::string::npos) {
+                end = text.size();
+            }
+            const std::string item = text.substr(start, end - start);
+            const size_t colon = item.find(':');
+            if (colon != std::string::npos && colon > 0) {
+                try {
+                    std::string action = item.substr(colon + 1);
+                    action.erase(0, action.find_first_not_of(' '));
+                    script.emplace_back(std::stod(item.substr(0, colon)), action);
+                } catch (const std::exception&) {
+                    LOG_WARNING(Service_IR, "Skylanders portal: script item '{}' has no time", item);
+                }
+            }
+            start = end + 1;
+        }
+        std::stable_sort(script.begin(), script.end(),
+                         [](const auto& a, const auto& b) { return a.first < b.first; });
+    }
+    const double now = std::chrono::duration<double>(std::chrono::steady_clock::now() - made).count();
+    SkylandersPortalFigure& figure = SkylandersPortalFigure::Instance();
+    while (script_next < script.size() && script[script_next].first <= now) {
+        const std::string& action = script[script_next].second;
+        LOG_INFO(Service_IR, "Skylanders portal: script at {:.1f} s: {}", now, action);
+        if (action == "lift") {
+            figure.Remove();
+        } else if (action.rfind("place ", 0) == 0) {
+            figure.Place(action.substr(6));
+        } else {
+            LOG_WARNING(Service_IR, "Skylanders portal: unknown script action '{}'", action);
+        }
+        ++script_next;
+    }
+}
+
 void SkylandersPortal::OnConnect() {
     received_packets = 0;
+    RunScript();
     SkylandersPortalFigure& figure = SkylandersPortalFigure::Instance();
     if (!list_loaded) {
         list_loaded = true;
@@ -254,6 +311,7 @@ void SkylandersPortal::Reply(const std::vector<u8>& reply) {
 
 void SkylandersPortal::OnReceive(std::span<const u8> data) {
     ++received_packets;
+    RunScript();
     if (Logged()) {
         LOG_INFO(Service_IR, "Skylanders portal: the game sent {} bytes (packet {}): {:02x}",
                  data.size(), received_packets, fmt::join(data, " "));

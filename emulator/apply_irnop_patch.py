@@ -147,7 +147,7 @@ void IR_USER::SendIrNopLarge(Kernel::HLERequestContext& ctx) {
     LOG_TRACE(Service_IR, "called, data={}", fmt::format("{:02x}", fmt::join(data, " ")));
 }
 
-void IR_USER::GetConnectionStatus(Kernel::HLERequestContext& ctx) {
+} // namespace Service::IR
 """
 
 # Its own edit (before InitializeIrNop), so a tree patched before these two existed takes them too.
@@ -190,7 +190,9 @@ CPP_EDITS = [
     ("    shared_memory = nullptr;\n    receive_buffer = nullptr;\n",
      "    shared_memory = nullptr;\n    receive_buffer = nullptr;\n"
      "    receive_by_copy = false;\n    received_packets.clear();\n"),
-    ("void IR_USER::GetConnectionStatus(Kernel::HLERequestContext& ctx) {\n", NEW_FUNCTIONS),
+    # At the file's end, outside apply_portal_patch.py's block (in it, a second run of that patch found its block
+    # broken and put it in again: functions twice, 2026-11-12).
+    ("} // namespace Service::IR\n", NEW_FUNCTIONS),
     ("void IR_USER::InitializeIrNop(Kernel::HLERequestContext& ctx) {\n", ERROR_FUNCTIONS),
     ("        {0x0001, nullptr, \"InitializeIrNop\"},\n",
      "        {0x0001, &IR_USER::InitializeIrNop, \"InitializeIrNop\"},\n"),
