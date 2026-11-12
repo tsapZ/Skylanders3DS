@@ -19,10 +19,12 @@ Nothing of the games is in this repository: no ROMs, no screenshots, no artwork.
 - In the patched Azahar: File > Skylanders Portal > Place figure... puts a figure file on the portal
   (the 1024-byte files of Documents\Skylanders\Figures; the file is never written), Lift figure off
   takes it away. Scripted runs name figure files in `SKYLANDERS_PORTAL_FIGURE` (separated by `;`).
-- Spyro's Adventure, Swap Force, Trap Team and SuperChargers Racing 3DS run up to their language
-  screens. Trap Team stopped at once in every Azahar ("Won't boot"): it runs an ARM-mode CPS, which
+- **Swap Force 3DS is playable with figures** too: it speaks the same portal protocol as Giants and
+  plays with the same emulated portal, unchanged.
+- Trap Team 3DS stopped at once in every Azahar ("Won't boot"): it runs an ARM-mode CPS, which
   Azahar's CPU core can't translate; `emulator/apply_cps_nop.py` makes it a no-op, as the CPU does
-  in user mode.
+  in user mode. It now runs to its menus. SuperChargers Racing 3DS runs to its driver select;
+  Spyro's Adventure 3DS to its language screen.
 
 Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md),
 [docs/findings-2026-11-11.md](docs/findings-2026-11-11.md),
@@ -34,6 +36,8 @@ Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md),
   window every few seconds and its log.
 - `tools/azahar_taps.ps1`: the same with taps and key presses posted to Azahar's window, so a
   scripted run gets past menus without the real mouse or keyboard.
+- `tools/ir_log_summary.py`: what a game and the emulated portal said to each other in one run
+  (commands and counts, blocks read and written, light colours, the first packets with replies).
 - `tools/make_blank_figure.py`: an empty figure file of a toy (as skylanders-portal makes them), for
   tests without anyone's own figures; `tools/make_reply_table.py`: a reply table for experiments
   (`SKYLANDERS_PORTAL_REPLIES`).
