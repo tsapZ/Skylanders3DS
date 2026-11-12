@@ -26,6 +26,9 @@ Each step ends with something that can be tried; the next one only starts when i
    no-op (emulator/apply_cps_nop.py). Still to do: SuperChargers Racing (to its driver select, no
    portal call yet: what brings it in, and vehicles), Spyro's Adventure past its language screen,
    traps in Trap Team.
+   Read from the dumps (tools/code_services.py): SuperChargers Racing has the same infrared library
+   as the three playable games; Spyro's Adventure an older one that takes each received packet with
+   ReceiveIrnop, which emulator/apply_irnop_patch.py adds to Azahar (built, not tried yet).
 5. **A picture for a monitor.** Both screens in one window: the top screen large and the touch
    screen beside or over it (Azahar's layouts are the start), the mouse as the touch screen, a
    controller layout like the console games', the portal menu (skylanders-portal's) for putting
@@ -33,6 +36,37 @@ Each step ends with something that can be tried; the next one only starts when i
    one), the touch screen on a second monitor; later perhaps a phone or tablet as the touch screen.
 6. **Core of Light.** A tab "Xbox 360 | 3DS" at the top; the 3DS games set up from the player's own
    dumps (decrypted CCI/CIA), their settings and figures as for the console games.
+   - **Recognising a dump**, as tools/code_services.py reads it:
+     - the file must start with "NCSD" at 0x100;
+     - partition 0 is an NCCH with NoCrypto set. An encrypted dump gets the line "decrypt it on your
+       own 3DS first".
+     - The product code at NCCH 0x150 (`CTR-P-` and four letters) names the game; the fourth letter
+       is the region (P Europe, E America; others when they turn up).
+
+     | Code | Game |
+     |---|---|
+     | ASP | Spyro's Adventure |
+     | AG6 | Giants |
+     | BSF | Swap Force |
+     | BS9 | Trap Team |
+     | BL5 | SuperChargers Racing |
+
+     The owner's European dumps also give the program ids 000400000004C000, 00040000000A3500,
+     00040000000E7F00, 000400000013BE00 and 000400000016AE00. CIA files (content 0 is the same NCCH)
+     come after CCI.
+   - **The emulator:**
+     - Core of Light downloads a release of the Azahar fork into its own folder, portable (the `user`
+       folder next to azahar.exe), and never touches %APPDATA%\Azahar.
+     - A release of a GPL program needs its source in public. So the fork goes public when the tab
+       does; that's the owner's decision, not before.
+   - **Per game:**
+     - a card as for the console games;
+     - settings: screen layout, resolution scale, the portal;
+     - figures from the same library (Documents\Skylanders\Figures), put on through the emulator's
+       Skylanders Portal menu;
+     - saves in the portable folder, backed up the way the console saves are.
+   - **First thing to try:** the tab lists the dumps it finds in a folder the player picks, with the
+     game's name and region, and starts one in the portable Azahar.
 
 Open: the emulator fork's home (a private mirror of azahar-emu/azahar with our branch, since a
 GitHub fork of a public repository can't be private), and how the figure library shows 3DS

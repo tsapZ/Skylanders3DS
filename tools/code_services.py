@@ -87,6 +87,7 @@ def look(path, code_out=None):
             print(path, ": encrypted (NoCrypto not set); this tool reads decrypted dumps only")
             return
         program_id = struct.unpack_from("<Q", head, 0x118)[0]
+        product = head[0x150:0x160].rstrip(b"\0").decode("ascii", "replace")
         exh = read(f, ncch + 0x200, 0x800)
         compressed = exh[0xD] & 1
         services = [exh[0x250 + 8 * i:0x258 + 8 * i].rstrip(b"\0").decode("ascii", "replace") for i in range(34)]
@@ -99,7 +100,7 @@ def look(path, code_out=None):
             if name.rstrip(b"\0") == b".code":
                 code = read(f, ncch + exefs_off + 0x200 + off, size)
     print("==", path.replace("\\", "/").split("/")[-1])
-    print("  program id %016X, code %s" % (program_id, "compressed" if compressed else "plain"))
+    print("  program id %016X, product code %s, code %s" % (program_id, product, "compressed" if compressed else "plain"))
     print("  services:", ", ".join(s for s in services if s))
     if code is None:
         print("  no .code in the ExeFS")
