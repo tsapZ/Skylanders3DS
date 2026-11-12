@@ -33,6 +33,7 @@ public static class AzIn {
   [DllImport("user32.dll")] public static extern IntPtr ChildWindowFromPointEx(IntPtr h, POINT p, uint flags);
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern uint MapVirtualKey(uint code, uint type);
+  [DllImport("user32.dll")] public static extern IntPtr GetParent(IntPtr h);
   // The deepest child window under a client point of top (skipping invisible/disabled ones), and
   // the point in that child's client coordinates.
   public static IntPtr Deepest(IntPtr top, int x, int y, out int cx, out int cy) {
@@ -62,6 +63,16 @@ function Tap([System.Diagnostics.Process]$p, [int]$x, [int]$y) {
   $p.Refresh(); $top = $p.MainWindowHandle
   $cx = 0; $cy = 0
   $w = [AzIn]::Deepest($top, $x, $y, [ref]$cx, [ref]$cy)
+  # Azahar's OpenGL surface can be a native window one window frame larger than the render widget
+  # around it (+16 x +39 px at 96 dpi, placed 8 px left and 31 px up). The picture is drawn at the
+  # surface's bottom left in the widget's size, but a click is read from the surface's top: without
+  # this, a tap lands that many pixels lower than drawn (a tap on English picked French, 2026-11-12).
+  $parent = [AzIn]::GetParent($w)
+  if ($parent -ne [IntPtr]::Zero -and $parent -ne $top) {
+    $rw = New-Object AzIn+RECT; [AzIn]::GetClientRect($w, [ref]$rw) | Out-Null
+    $rp = New-Object AzIn+RECT; [AzIn]::GetClientRect($parent, [ref]$rp) | Out-Null
+    if ($rw.B -gt $rp.B) { $cy -= ($rw.B - $rp.B) }
+  }
   [AzIn]::PostMessage($w, 0x0200, [IntPtr]0, [AzIn]::L($cx, $cy)) | Out-Null   # WM_MOUSEMOVE
   [AzIn]::PostMessage($w, 0x0201, [IntPtr]1, [AzIn]::L($cx, $cy)) | Out-Null   # WM_LBUTTONDOWN
   Start-Sleep -Milliseconds 120
