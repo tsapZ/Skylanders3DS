@@ -7,6 +7,9 @@ packet with ReceiveIrnop (0x000F0040: a static buffer, the payload only; its cal
 portal's reply letter) or, above 252 bytes, ReceiveIrnopLarge (0x00100042: a mapped buffer). Both answer the payload's
 size and how many packets still wait (the game reads again while that is above zero). It sends with SendIrNop or, above
 252 bytes, SendIrNopLarge (0x000E0042: a mapped buffer). Azahar had none of the four (nullptr in the function table).
+After packets it asks GetLatestReceiveErrorResult / GetLatestSendErrorResult (0x00110040 / 0x00120040, a byte in, the
+result out), also nullptr in Azahar: in the first run (2026-11-12) the game read blocks 00 01 08 24, got failures there
+and finalized infrared 0.7 s after connecting. Both answer success and no error now.
 Here InitializeIrNop is InitializeIrNopShared plus a mode in which received payloads wait in a queue for ReceiveIrnop
 instead of going into the shared memory's receive buffer; an empty queue answers an error (NoData), which the game
 takes as "nothing". Giants, Swap Force, Trap Team and SuperChargers Racing call InitializeIrNopShared and stay as
@@ -47,6 +50,13 @@ H_EDITS = [
      "\n"
      "    /// The oldest received payload, cut to max_size; waiting is how many are left after it.\n"
      "    std::vector<u8> TakeReceived(u32 max_size, u32& waiting);\n"),
+    ("    std::vector<u8> TakeReceived(u32 max_size, u32& waiting);\n",
+     "    std::vector<u8> TakeReceived(u32 max_size, u32& waiting);\n"
+     "\n"
+     "    /// GetLatestReceiveErrorResult / GetLatestSendErrorResult service functions (input 1 : a byte;\n"
+     "    /// output 2 : the result of the latest receive / send): Spyro's Adventure 3DS asks after packets.\n"
+     "    void GetLatestReceiveErrorResult(Kernel::HLERequestContext& ctx);\n"
+     "    void GetLatestSendErrorResult(Kernel::HLERequestContext& ctx);\n"),
     ("    IRDevice* active_device = nullptr;\n",
      "    IRDevice* active_device = nullptr;\n"
      "    // InitializeIrNop (Spyro's Adventure 3DS): received payloads wait here for ReceiveIrnop instead of going\n"
@@ -140,6 +150,28 @@ void IR_USER::SendIrNopLarge(Kernel::HLERequestContext& ctx) {
 void IR_USER::GetConnectionStatus(Kernel::HLERequestContext& ctx) {
 """
 
+# Its own edit (before InitializeIrNop), so a tree patched before these two existed takes them too.
+ERROR_FUNCTIONS = """void IR_USER::GetLatestReceiveErrorResult(Kernel::HLERequestContext& ctx) {
+    // Spyro's Adventure 3DS asks after packets and finalizes infrared when the call fails; the
+    // emulated link has no errors, as the shared memory header's own field says.
+    IPC::RequestParser rp(ctx);
+    rp.Pop<u8>();
+    IPC::RequestBuilder rb = rp.MakeBuilder(2, 0);
+    rb.Push(ResultSuccess);
+    rb.Push<u32>(0);
+}
+
+void IR_USER::GetLatestSendErrorResult(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx);
+    rp.Pop<u8>();
+    IPC::RequestBuilder rb = rp.MakeBuilder(2, 0);
+    rb.Push(ResultSuccess);
+    rb.Push<u32>(0);
+}
+
+void IR_USER::InitializeIrNop(Kernel::HLERequestContext& ctx) {
+"""
+
 CPP_EDITS = [
     ("void IR_USER::PutToReceive(std::span<const u8> payload) {\n"
      "    LOG_TRACE(Service_IR, \"called, data={}\", fmt::format(\"{:02x}\", fmt::join(payload, \" \")));\n",
@@ -159,6 +191,7 @@ CPP_EDITS = [
      "    shared_memory = nullptr;\n    receive_buffer = nullptr;\n"
      "    receive_by_copy = false;\n    received_packets.clear();\n"),
     ("void IR_USER::GetConnectionStatus(Kernel::HLERequestContext& ctx) {\n", NEW_FUNCTIONS),
+    ("void IR_USER::InitializeIrNop(Kernel::HLERequestContext& ctx) {\n", ERROR_FUNCTIONS),
     ("        {0x0001, nullptr, \"InitializeIrNop\"},\n",
      "        {0x0001, &IR_USER::InitializeIrNop, \"InitializeIrNop\"},\n"),
     ("        {0x000E, nullptr, \"SendIrNopLarge\"},\n",
@@ -167,6 +200,10 @@ CPP_EDITS = [
      "        {0x000F, &IR_USER::ReceiveIrnop, \"ReceiveIrnop\"},\n"),
     ("        {0x0010, nullptr, \"ReceiveIrnopLarge\"},\n",
      "        {0x0010, &IR_USER::ReceiveIrnopLarge, \"ReceiveIrnopLarge\"},\n"),
+    ("        {0x0011, nullptr, \"GetLatestReceiveErrorResult\"},\n",
+     "        {0x0011, &IR_USER::GetLatestReceiveErrorResult, \"GetLatestReceiveErrorResult\"},\n"),
+    ("        {0x0012, nullptr, \"GetLatestSendErrorResult\"},\n",
+     "        {0x0012, &IR_USER::GetLatestSendErrorResult, \"GetLatestSendErrorResult\"},\n"),
 ]
 
 

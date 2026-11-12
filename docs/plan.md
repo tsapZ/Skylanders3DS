@@ -26,9 +26,12 @@ Each step ends with something that can be tried; the next one only starts when i
    no-op (emulator/apply_cps_nop.py). Still to do: SuperChargers Racing (to its driver select, no
    portal call yet: what brings it in, and vehicles), Spyro's Adventure past its language screen,
    traps in Trap Team.
-   Read from the dumps (tools/code_services.py): SuperChargers Racing has the same infrared library
-   as the three playable games; Spyro's Adventure an older one that takes each received packet with
-   ReceiveIrnop, which emulator/apply_irnop_patch.py adds to Azahar (built, not tried yet).
+   **All five reached, 2026-11-12 06:00:**
+   - Spyro's Adventure plays with figures after emulator/apply_irnop_patch.py (its older infrared
+     library's ReceiveIrnop).
+   - SuperChargers Racing reads a figure through the tab above its driver select.
+
+   Still to do: a vehicle and a race in SuperChargers Racing, traps in Trap Team.
 5. **A picture for a monitor.** Both screens in one window: the top screen large and the touch
    screen beside or over it (Azahar's layouts are the start), the mouse as the touch screen, a
    controller layout like the console games', the portal menu (skylanders-portal's) for putting
