@@ -21,6 +21,11 @@ Each step ends with something that can be tried; the next one only starts when i
 4. **The other games.** Spyro's Adventure 3DS (rated Bad: what goes wrong), Swap Force 3DS and
    SuperChargers Racing (rated Great), Trap Team 3DS (won't boot: why). The owner can dump the
    other three from his own 3DS.
+   **Swap Force and Trap Team reached, 2026-11-12** (docs/findings-2026-11-12.md): both talk to the
+   portal exactly as Giants does and play with the same device; Trap Team needed an ARM-mode CPS as a
+   no-op (emulator/apply_cps_nop.py). Still to do: SuperChargers Racing (to its driver select, no
+   portal call yet: what brings it in, and vehicles), Spyro's Adventure past its language screen,
+   traps in Trap Team.
 5. **A picture for a monitor.** Both screens in one window: the top screen large and the touch
    screen beside or over it (Azahar's layouts are the start), the mouse as the touch screen, a
    controller layout like the console games', the portal menu (skylanders-portal's) for putting
