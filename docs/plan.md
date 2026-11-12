@@ -29,9 +29,10 @@ Each step ends with something that can be tried; the next one only starts when i
    **All five reached, 2026-11-12 06:00:**
    - Spyro's Adventure plays with figures after emulator/apply_irnop_patch.py (its older infrared
      library's ReceiveIrnop).
-   - SuperChargers Racing reads a figure through the tab above its driver select.
+   - SuperChargers Racing races: a driver through the tab above its driver select, then a vehicle
+     put on while it asks (07:35).
 
-   Still to do: a vehicle and a race in SuperChargers Racing, traps in Trap Team.
+   Still to do: traps in Trap Team.
 5. **A picture for a monitor.** Both screens in one window: the top screen large and the touch
    screen beside or over it (Azahar's layouts are the start), the mouse as the touch screen, a
    controller layout like the console games', the portal menu (skylanders-portal's) for putting

@@ -28,8 +28,12 @@ Nothing of the games is in this repository: no ROMs, no screenshots, no artwork.
 - **Spyro's Adventure 3DS is playable with figures** too. Its older infrared library takes each
   received packet with `ReceiveIrnop`, which Azahar lacked (found with `tools/code_services.py`);
   `emulator/apply_irnop_patch.py` adds it.
-- **SuperChargers Racing 3DS reads figures** through the same portal. The yellow tab above its
-  driver select's portraits starts the portal, and the game showed the test figure.
+- **SuperChargers Racing 3DS races** with a driver and a vehicle through the same portal:
+  - the driver goes on through the yellow tab above the driver select's portraits;
+  - the vehicle goes on while the game asks for it (`SKYLANDERS_PORTAL_SCRIPT` times that in
+    scripted runs).
+
+  So all five 3DS games now play with figures.
 
 Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md),
 [docs/findings-2026-11-11.md](docs/findings-2026-11-11.md),
