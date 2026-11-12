@@ -83,7 +83,8 @@ function Key([System.Diagnostics.Process]$p, [string]$name) {
   $p.Refresh(); $top = $p.MainWindowHandle
   $cx = 0; $cy = 0
   $w = [AzIn]::Deepest($top, 850, 360, [ref]$cx, [ref]$cy)
-  $vk = [int][char]$name.ToUpper()[0]
+  # A letter or digit, or F1..F12 (Azahar's own shortcuts: F10 the next screen layout, F8 upright).
+  $vk = if ($name -match '^[Ff](\d{1,2})$') { 0x6F + [int]$Matches[1] } else { [int][char]$name.ToUpper()[0] }
   $scan = [AzIn]::MapVirtualKey([uint32]$vk, 0)
   [AzIn]::PostMessage($w, 0x0100, [IntPtr]$vk, [IntPtr](1 -bor ($scan -shl 16))) | Out-Null           # WM_KEYDOWN
   Start-Sleep -Milliseconds 150
