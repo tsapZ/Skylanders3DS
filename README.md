@@ -25,6 +25,9 @@ Nothing of the games is in this repository: no ROMs, no screenshots, no artwork.
   Azahar's CPU core can't translate; `emulator/apply_cps_nop.py` makes it a no-op, as the CPU does
   in user mode. SuperChargers Racing 3DS runs to its driver select without asking for the portal
   yet; Spyro's Adventure 3DS to its language screen.
+- Read from the dumps (`tools/code_services.py`): SuperChargers Racing has the same infrared library
+  as Giants, Swap Force and Trap Team. Spyro's Adventure has an older one that takes each received
+  packet with `ReceiveIrnop`, which Azahar lacked; `emulator/apply_irnop_patch.py` adds it (untried).
 
 Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md),
 [docs/findings-2026-11-11.md](docs/findings-2026-11-11.md),
@@ -41,6 +44,9 @@ Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md),
 - `tools/make_blank_figure.py`: an empty figure file of a toy (as skylanders-portal makes them), for
   tests without anyone's own figures; `tools/make_reply_table.py`: a reply table for experiments
   (`SKYLANDERS_PORTAL_REPLIES`).
+- `tools/code_services.py`: what a decrypted dump asks for, without running it: the services its
+  exheader allows and the infrared commands in its code (`--code-out` writes the decompressed code
+  for a disassembler, into a local folder only).
 
 ## License
 
