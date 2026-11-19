@@ -83,6 +83,7 @@ Each step ends with something that can be tried; the next one only starts when i
    - **First thing to try:** the tab lists the dumps it finds in a folder the player picks, with the
      game's name and region, and starts one in the portable Azahar.
 
-Open: the emulator fork's home (a private mirror of azahar-emu/azahar with our branch, since a
-GitHub fork of a public repository can't be private), and how the figure library shows 3DS
-progress (the 3DS games keep their own saves, not on the figure).
+The emulator fork's home (decided 2026-11-16, done 2026-11-19): the public GitHub fork tsapZ/azahar,
+branch `skylanders`, with its releases; dynarmic's one fix in tsapZ/dynarmic, branch `skylanders`.
+Open: how the figure library shows 3DS progress (the 3DS games keep their own saves, not on the
+figure).

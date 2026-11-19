@@ -1,43 +1,52 @@
-# Skylanders 3DS (private, planning)
+# Skylanders 3DS
 
-The five Nintendo 3DS Skylanders games on PC: Spyro's Adventure, Giants, Swap Force, Trap Team and
-SuperChargers Racing. Each is its own game (n-Space and Beenox), not a port of the console ones.
-There is no static recompiler for the 3DS like ReXGlue is for the Xbox 360, so the plan is an
-emulator core with what the games need added to it, started from Core of Light (a tab
-"Xbox 360 | 3DS" at the top).
+The five Nintendo 3DS Skylanders games on PC with figures: Spyro's Adventure, Giants, Swap Force,
+Trap Team and SuperChargers Racing. Each is its own game (n-Space and Beenox), not a port of the
+console ones. There is no static recompiler for the 3DS like ReXGlue is for the Xbox 360, so this
+is the Azahar emulator with an emulated 3DS Portal of Power added to it.
 
-Nothing of the games is in this repository: no ROMs, no screenshots, no artwork.
+Nothing of the games is in this repository or the download: no ROMs, no screenshots, no artwork.
 
-## Where it stands (2026-11-12)
+## Download and play
 
-- **Giants 3DS is playable with figures** in Azahar (the merge of Lime3DS and Citra, GPLv2 or later)
-  with this repository's patch (`emulator/apply_portal_patch.py`): `AutoConnection` connects an
-  emulated infrared portal that answers the game as a console portal does; the game takes the
-  figures into its crystals and plays.
-- The protocol: every infrared packet is the portal light's colour (r g b) and then a console portal
-  command (R, A, C, S, Q, W); the game asks for the status (S) itself.
-- In the patched Azahar: File > Skylanders Portal > Place figure... puts a figure file on the portal
-  (the 1024-byte files of Documents\Skylanders\Figures; the file is never written), Lift figure off
-  takes it away. Scripted runs name figure files in `SKYLANDERS_PORTAL_FIGURE` (separated by `;`).
-- **Swap Force and Trap Team 3DS are playable with figures** too: they speak the same portal
-  protocol as Giants and play with the same emulated portal, unchanged.
-- Trap Team 3DS stopped at once in every Azahar ("Won't boot"): it runs an ARM-mode CPS, which
-  Azahar's CPU core can't translate; `emulator/apply_cps_nop.py` makes it a no-op, as the CPU does
-  in user mode. SuperChargers Racing 3DS runs to its driver select without asking for the portal
-  yet; Spyro's Adventure 3DS to its language screen.
-- **Spyro's Adventure 3DS is playable with figures** too. Its older infrared library takes each
-  received packet with `ReceiveIrnop`, which Azahar lacked (found with `tools/code_services.py`);
-  `emulator/apply_irnop_patch.py` adds it.
-- **SuperChargers Racing 3DS races** with a driver and a vehicle through the same portal:
-  - the driver goes on through the yellow tab above the driver select's portraits;
-  - the vehicle goes on while the game asks for it (`SKYLANDERS_PORTAL_SCRIPT` times that in
-    scripted runs).
+1. Get the zip from [tsapZ/azahar's releases](https://github.com/tsapZ/azahar/releases) (Windows,
+   64-bit), unzip it anywhere and start `azahar.exe`. Its settings and saves stay in the `user`
+   folder next to it, so an Azahar you already have is not touched.
+2. Open a dump of your own cartridge (decrypted .cci/.3ds).
+3. When the game asks for the portal: **File > Skylanders Portal > Place figure...** and pick a
+   figure file (the 1024-byte dumps, for example from `Documents\Skylanders\Figures` of the Xbox 360
+   ports). **Lift figure off** takes it off again. The file is only read: what the game writes to
+   the figure is not saved, the 3DS games keep their progress in their own saves.
+4. F10 switches between Azahar's screen layouts (View > Screen Layout has them too): on a 16:9
+   monitor *Large Screen* fits well, the big top screen with the touch screen in a corner.
 
-  So all five 3DS games now play with figures.
-- **Both screens on a monitor:** Azahar's large screen layout with the touch screen bottom right at
-  proportion 2.5 (big enough to hit its buttons with the mouse) is the default for a 16:9 monitor;
-  F10 switches to the other layouts (side by side, single screen, a second window for a second
-  monitor). Why: [docs/plan.md](docs/plan.md) step 5.
+| Game | State |
+|---|---|
+| Spyro's Adventure 3DS | plays with figures |
+| Giants 3DS | plays with figures |
+| Swap Force 3DS | plays with figures |
+| Trap Team 3DS | plays with figures (it didn't start in any Azahar before: a CPU fix, below) |
+| SuperChargers Racing 3DS | races with a driver and a vehicle |
+
+Problems and ideas go to [Core of Light's issues](https://github.com/tsapZ/SkylandersCoreOfLight/issues),
+not to the Azahar team: this isn't an official Azahar build. Later Core of Light gets a
+"Xbox 360 | 3DS" tab that finds your dumps and starts them in this Azahar.
+
+## What was changed in Azahar
+
+The source is the `skylanders` branch of [tsapZ/azahar](https://github.com/tsapZ/azahar/tree/skylanders)
+(its last commits); `emulator/` here has the same changes as patch scripts for a plain Azahar checkout.
+
+- **The portal over infrared** (`apply_portal_patch.py`): the games connect with `AutoConnection`;
+  every packet is the portal light's colour (r g b) and then a console portal command (R, A, C, S,
+  Q, W), so the emulated portal answers as a console portal does. Scripted runs name figure files
+  in `SKYLANDERS_PORTAL_FIGURE` (separated by `;`).
+- **Spyro's Adventure's older infrared library** takes each packet with `ReceiveIrnop`, which Azahar
+  lacked (`apply_irnop_patch.py`, found with `tools/code_services.py`).
+- **Trap Team 3DS** runs an ARM-mode CPS at boot, which Azahar's CPU core (dynarmic) couldn't
+  translate, so the emulator stopped at once. In user mode CPS changes nothing, and dynarmic already
+  treats the Thumb CPS as a no-op; `apply_cps_nop.py` does the same for ARM mode
+  ([tsapZ/dynarmic](https://github.com/tsapZ/dynarmic/tree/skylanders)).
 
 Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md),
 [docs/findings-2026-11-11.md](docs/findings-2026-11-11.md),
@@ -59,10 +68,17 @@ Details: [docs/findings-2026-11-10.md](docs/findings-2026-11-10.md),
   exheader allows and the infrared commands in its code (`--code-out` writes the decompressed code
   for a disassembler, into a local folder only).
 
+## How it was made
+
+To be upfront about it: almost all of the code and docs here and in the Azahar branch were written
+by [Claude](https://claude.ai) in Claude Code. I decided what to build and tested it with my own
+cartridges. If AI-made projects aren't your thing, that's fair.
+
 ## License
 
-The emulator part will be a fork of Azahar and so GPLv2 or later. The portal and figure code comes
-from tsapZ/skylanders-portal (MIT), which a GPL program may include.
+Azahar and so tsapZ/azahar are GPLv2 or later. The scripts and docs here are MIT, like the other
+Skylanders repositories; the portal and figure code comes from tsapZ/skylanders-portal (MIT), which a
+GPL program may include.
 
 Not affiliated with Activision, Nintendo or the Azahar project. Skylanders is a trademark of its
 owners.

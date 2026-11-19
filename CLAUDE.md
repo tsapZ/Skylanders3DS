@@ -10,8 +10,11 @@ GitHub, shared code, releases) are in Core of Light's maintainer/RULES.md
 
 The five Nintendo 3DS Skylanders games on PC through an emulator core (Azahar, GPLv2+) with a
 3DS Portal of Power over emulated infrared, started from Core of Light (tab "Xbox 360 | 3DS").
-Private and planning only for now (owner's word, 2026-11-10): README, docs/findings-*.md,
-docs/plan.md, tools/.
+Public since 2026-11-19 (the owner's go, 2026-11-16): README, docs/findings-*.md,
+docs/plan.md, tools/, emulator/. The emulator itself is the fork tsapZ/azahar (branch `skylanders`,
+releases there; dynarmic's fix in tsapZ/dynarmic), built from a neutral drive so no user paths get
+into azahar.exe (%LOCALAPPDATA%\SkylandersDev\3ds\build_azahar_release.cmd, release\pack_azahar.py
+scans every file before zipping).
 
 ## Particular to this repository
 
